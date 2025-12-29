@@ -10,7 +10,7 @@ if __name__ == "__main__":
     print("Starting training...")
     try:
         trainer = Trainer(load_parameters=True)
-        trainer.train(epochs=5)
+        trainer.train(epochs=10)
         print("Training completed successfully.")
     except Exception as e:
         print(f"Training failed: {e}")

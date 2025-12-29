@@ -37,10 +37,10 @@ class Trainer:
         self.val_dataset = OcrDataSet(mode="val")
 
         self.train_loader = DataLoader(
-            self.train_dataset, batch_size=64, shuffle=True, num_workers=4
+            self.train_dataset, batch_size=64, shuffle=True, num_workers=2
         )
         self.val_loader = DataLoader(
-            self.val_dataset, batch_size=64, shuffle=False, num_workers=4
+            self.val_dataset, batch_size=64, shuffle=False, num_workers=2
         )
 
         self.loss_func = nn.CTCLoss(blank=0, zero_infinity=True)
@@ -127,15 +127,20 @@ class Trainer:
 
     def train(self, epochs=40):
         best_loss = float("inf")
-
+        
+        # Initialize log file
+        log_file = "training_log.csv"
+        with open(log_file, "w") as f:
+            f.write("epoch,train_loss,val_loss\n")
+        
         for epoch in range(epochs):
             self.net.train()
             train_loss = 0.0
-
+            
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{epochs}")
             for images, targets, target_lengths in pbar:
                 images = images.to(self.device)
-
+                
                 # Prepare targets
                 flat_targets = torch.tensor([], dtype=torch.long)
                 for i, length in enumerate(target_lengths):
@@ -164,17 +169,21 @@ class Trainer:
                 pbar.set_postfix({"loss": loss.item()})
 
             avg_train_loss = train_loss / len(self.train_loader)
-
+            
             # Validation
             val_loss = self.validate()
-
+            
             print(
                 f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}"
             )
-
+            
+            # Log to CSV
+            with open(log_file, "a") as f:
+                f.write(f"{epoch+1},{avg_train_loss:.4f},{val_loss:.4f}\n")
+            
             # Save Last
             torch.save(self.net.state_dict(), src.config.common_config.weight)
-
+            
             # Save Best (based on Val Loss)
             if val_loss < best_loss:
                 best_loss = val_loss
