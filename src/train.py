@@ -94,11 +94,13 @@ class Trainer:
     def validate(self):
         self.net.eval()
         val_loss = 0.0
+        total_chars = 0
+        correct_chars = 0
 
         with torch.no_grad():
-            for images, targets, target_lengths in tqdm(
+            for batch_idx, (images, targets, target_lengths) in enumerate(tqdm(
                 self.val_loader, desc="Validating"
-            ):
+            )):
                 images = images.to(self.device)
 
                 # Prepare targets for CTCLoss (flattened)
@@ -122,20 +124,36 @@ class Trainer:
                 )
                 val_loss += loss.item()
 
+                # Accuracy
+                decoded_preds = self.decode_prediction(predict)
+                decoded_targets = self.decode_target(flat_targets, target_lengths.cpu())
+                correct, total = self.calculate_char_accuracy(decoded_preds, decoded_targets)
+                correct_chars += correct
+                total_chars += total
+
+                if batch_idx == 0:
+                    print(f"\nValidation Sample - Pred: {decoded_preds[0]}, Target: {decoded_targets[0]}")
+
+
         avg_loss = val_loss / len(self.val_loader)
-        return avg_loss
+        avg_acc = correct_chars / total_chars if total_chars > 0 else 0.0
+        return avg_loss, avg_acc
 
     def train(self, epochs=40):
         best_loss = float("inf")
+        last_saved_path = None
+        best_saved_path = None
         
         # Initialize log file
         log_file = "training_log.csv"
         with open(log_file, "w") as f:
-            f.write("epoch,train_loss,val_loss\n")
+            f.write("epoch,train_loss,train_acc,val_loss,val_acc\n")
         
         for epoch in range(epochs):
             self.net.train()
             train_loss = 0.0
+            train_correct_chars = 0
+            train_total_chars = 0
             
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{epochs}")
             for images, targets, target_lengths in pbar:
@@ -166,32 +184,58 @@ class Trainer:
                 self.optimizer.step()
 
                 train_loss += loss.item()
+                
+                # Accuracy
+                decoded_preds = self.decode_prediction(predict)
+                decoded_targets = self.decode_target(flat_targets, target_lengths.cpu())
+                correct, total = self.calculate_char_accuracy(decoded_preds, decoded_targets)
+                train_correct_chars += correct
+                train_total_chars += total
+
                 pbar.set_postfix({"loss": loss.item()})
 
             avg_train_loss = train_loss / len(self.train_loader)
+            avg_train_acc = train_correct_chars / train_total_chars if train_total_chars > 0 else 0.0
             
             # Validation
-            val_loss = self.validate()
+            val_loss, val_acc = self.validate()
             
             print(
-                f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}"
+                f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}"
             )
             
             # Log to CSV
             with open(log_file, "a") as f:
-                f.write(f"{epoch+1},{avg_train_loss:.4f},{val_loss:.4f}\n")
+                f.write(f"{epoch+1},{avg_train_loss:.4f},{avg_train_acc:.4f},{val_loss:.4f},{val_acc:.4f}\n")
             
-            # Save Last
-            torch.save(self.net.state_dict(), src.config.common_config.weight)
+            # Save Last (Rotating)
+            current_last_path = src.config.common_config.weight.replace(
+                ".pth", f"_last_epoch_{epoch+1}.pth"
+            )
+            torch.save(self.net.state_dict(), current_last_path)
             
-            # Save Best (based on Val Loss)
+            if last_saved_path and os.path.exists(last_saved_path) and last_saved_path != current_last_path:
+                try:
+                    os.remove(last_saved_path)
+                except OSError as e:
+                    print(f"Error deleting old last weight: {e}")
+            last_saved_path = current_last_path
+
+            # Save Best (Rotating)
             if val_loss < best_loss:
                 best_loss = val_loss
-                best_weight_path = src.config.common_config.weight.replace(
-                    ".pth", "_best.pth"
+                current_best_path = src.config.common_config.weight.replace(
+                    ".pth", f"_best_epoch_{epoch+1}.pth"
                 )
-                torch.save(self.net.state_dict(), best_weight_path)
-                print(f"New best model saved with Val Loss: {val_loss:.4f}")
+                torch.save(self.net.state_dict(), current_best_path)
+                print(f"New best model saved: {current_best_path} (Val Loss: {val_loss:.4f})")
+                
+                if best_saved_path and os.path.exists(best_saved_path) and best_saved_path != current_best_path:
+                    try:
+                        os.remove(best_saved_path)
+                    except OSError as e:
+                        print(f"Error deleting old best weight: {e}")
+                best_saved_path = current_best_path
 
 
 if __name__ == "__main__":
