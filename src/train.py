@@ -81,13 +81,13 @@ class Trainer:
         total_chars = 0
         correct_chars = 0
         for pred, target in zip(preds, targets):
-            # Simple character matching using Levenshtein distance or just direct comparison if lengths match
-            # Here we use a simpler approach: count matching characters at same positions up to min length
-            # A better approach for OCR is usually Levenshtein distance (Edit Distance), but for simplicity:
-            import difflib
-
-            matcher = difflib.SequenceMatcher(None, pred, target)
-            correct_chars += sum(block.size for block in matcher.get_matching_blocks())
+            # Match by position
+            min_len = min(len(pred), len(target))
+            matches = 0
+            for i in range(min_len):
+                if pred[i] == target[i]:
+                    matches += 1
+            correct_chars += matches
             total_chars += len(target)
         return correct_chars, total_chars
 
