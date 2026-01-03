@@ -21,12 +21,8 @@ class OcrDataSet(Dataset):
         self.dataset = []
         
         # Determine root directory based on mode
-        if mode == 'train':
-            self.root_dir = 'data/dataset_lr/train'
-        elif mode == 'val':
-            self.root_dir = 'data/dataset_lr/val'
-        elif mode == 'test':
-            self.root_dir = 'data/dataset_lr/test'
+        if mode in ['train', 'val', 'test']:
+            self.root_dir = os.path.join(src.config.common_config.data_root, mode)
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'train', 'val', or 'test'.")
 

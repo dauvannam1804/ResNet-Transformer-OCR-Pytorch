@@ -8,6 +8,9 @@ class Config:
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.weight = 'weights/ocr_net2.pth'
         
+        # Dataset root path
+        self.data_root = 'data/dataset_lr'
+        
         # Load characters from file
         char_file = 'data/chars.txt'
         if os.path.exists(char_file):
