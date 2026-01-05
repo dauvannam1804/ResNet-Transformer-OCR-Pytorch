@@ -91,11 +91,21 @@ class Trainer:
             total_chars += len(target)
         return correct_chars, total_chars
 
+    def calculate_full_match_accuracy(self, preds, targets):
+        total_samples = len(targets)
+        correct_matches = 0
+        for pred, target in zip(preds, targets):
+            if pred == target:
+                correct_matches += 1
+        return correct_matches, total_samples
+
     def validate(self):
         self.net.eval()
         val_loss = 0.0
         total_chars = 0
         correct_chars = 0
+        total_samples = 0
+        correct_matches = 0
 
         with torch.no_grad():
             for batch_idx, (images, targets, target_lengths) in enumerate(tqdm(
@@ -131,13 +141,19 @@ class Trainer:
                 correct_chars += correct
                 total_chars += total
 
+                # Full Match Accuracy
+                matches, samples = self.calculate_full_match_accuracy(decoded_preds, decoded_targets)
+                correct_matches += matches
+                total_samples += samples
+
                 if batch_idx == 0:
                     print(f"\nValidation Sample - Pred: {decoded_preds[0]}, Target: {decoded_targets[0]}")
 
 
         avg_loss = val_loss / len(self.val_loader)
         avg_acc = correct_chars / total_chars if total_chars > 0 else 0.0
-        return avg_loss, avg_acc
+        avg_full_match_acc = correct_matches / total_samples if total_samples > 0 else 0.0
+        return avg_loss, avg_acc, avg_full_match_acc
 
     def train(self, epochs=40):
         best_loss = float("inf")
@@ -147,13 +163,15 @@ class Trainer:
         # Initialize log file
         log_file = "training_log.csv"
         with open(log_file, "w") as f:
-            f.write("epoch,train_loss,train_acc,val_loss,val_acc\n")
+            f.write("epoch,train_loss,train_acc,train_full_match_acc,val_loss,val_acc,val_full_match_acc\n")
         
         for epoch in range(epochs):
             self.net.train()
             train_loss = 0.0
             train_correct_chars = 0
             train_total_chars = 0
+            train_correct_matches = 0
+            train_total_samples = 0
             
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{epochs}")
             for images, targets, target_lengths in pbar:
@@ -192,21 +210,27 @@ class Trainer:
                 train_correct_chars += correct
                 train_total_chars += total
 
+                # Full Match Accuracy
+                matches, samples = self.calculate_full_match_accuracy(decoded_preds, decoded_targets)
+                train_correct_matches += matches
+                train_total_samples += samples
+
                 pbar.set_postfix({"loss": loss.item()})
 
             avg_train_loss = train_loss / len(self.train_loader)
             avg_train_acc = train_correct_chars / train_total_chars if train_total_chars > 0 else 0.0
+            avg_train_full_match_acc = train_correct_matches / train_total_samples if train_total_samples > 0 else 0.0
             
             # Validation
-            val_loss, val_acc = self.validate()
+            val_loss, val_acc, val_full_match_acc = self.validate()
             
             print(
-                f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}"
+                f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_acc:.4f}, Train Full Match Acc: {avg_train_full_match_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}, Val Full Match Acc: {val_full_match_acc:.4f}"
             )
             
             # Log to CSV
             with open(log_file, "a") as f:
-                f.write(f"{epoch+1},{avg_train_loss:.4f},{avg_train_acc:.4f},{val_loss:.4f},{val_acc:.4f}\n")
+                f.write(f"{epoch+1},{avg_train_loss:.4f},{avg_train_acc:.4f},{avg_train_full_match_acc:.4f},{val_loss:.4f},{val_acc:.4f},{val_full_match_acc:.4f}\n")
             
             # Save Last (Rotating)
             current_last_path = src.config.common_config.weight.replace(
