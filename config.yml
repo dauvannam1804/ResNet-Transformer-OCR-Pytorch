@@ -1,0 +1,11 @@
+common:
+  data_root: "data/dataset_lr_500"
+  weight: "weights/ocr_net2.pth"
+  class_name_file: "data/chars.txt"
+
+train:
+  epochs: 40
+  batch_size: 64
+  lr: 0.0001
+  num_workers: 2
+  save_dir: "weights"

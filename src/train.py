@@ -32,19 +32,36 @@ class Trainer:
 
         self.net = self.net.to(self.device)
 
+        # Log Configuration
+        print("----------------------------------------------------------------")
+        print("Training Configuration:")
+        print(f"  Data Root: {src.config.common_config.data_root}")
+        print(f"  Weights Path: {src.config.common_config.weight}")
+        print(f"  Class Name File: {src.config.common_config.common_config.get('class_name_file', 'Default')}")
+        print(f"  Device: {self.device}")
+        print(f"  Batch Size: {src.config.common_config.train_config.get('batch_size', 64)}")
+        print(f"  Num Workers: {src.config.common_config.train_config.get('num_workers', 2)}")
+        print(f"  Learning Rate: {src.config.common_config.train_config.get('lr', 0.0001)}")
+        print(f"  Epochs: {src.config.common_config.train_config.get('epochs', 40)}")
+        print("----------------------------------------------------------------")
+
         # Datasets
         self.train_dataset = OcrDataSet(mode="train")
         self.val_dataset = OcrDataSet(mode="val")
 
+        batch_size = src.config.common_config.train_config.get('batch_size', 64)
+        num_workers = src.config.common_config.train_config.get('num_workers', 2)
+        
         self.train_loader = DataLoader(
-            self.train_dataset, batch_size=64, shuffle=True, num_workers=2
+            self.train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
         self.val_loader = DataLoader(
-            self.val_dataset, batch_size=64, shuffle=False, num_workers=2
+            self.val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
         )
 
         self.loss_func = nn.CTCLoss(blank=0, zero_infinity=True)
-        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.0001)
+        lr = src.config.common_config.train_config.get('lr', 0.0001)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=lr)
 
         self.best_acc = 0.0
 
@@ -155,7 +172,9 @@ class Trainer:
         avg_full_match_acc = correct_matches / total_samples if total_samples > 0 else 0.0
         return avg_loss, avg_acc, avg_full_match_acc
 
-    def train(self, epochs=40):
+    def train(self, epochs=None):
+        if epochs is None:
+            epochs = src.config.common_config.train_config.get('epochs', 40)
         best_loss = float("inf")
         last_saved_path = None
         best_saved_path = None
@@ -267,4 +286,4 @@ if __name__ == "__main__":
     os.makedirs(os.path.dirname(src.config.common_config.weight), exist_ok=True)
 
     trainer = Trainer(load_parameters=True)
-    trainer.train(epochs=40)
+    trainer.train()
